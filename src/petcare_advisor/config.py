@@ -39,11 +39,11 @@ class Settings(BaseSettings):
         super().__init__(**kwargs)
     
     # Model Configuration
-    model_config_symptom_intake: str = os.getenv("MODEL_CONFIG_SYMPTOM_INTAKE", "gemini-1.5-flash")
+    model_config_symptom_intake: str = os.getenv("MODEL_CONFIG_SYMPTOM_INTAKE", "gemini-2.0-flash")
     model_config_vision: str = os.getenv("MODEL_CONFIG_VISION", "gpt-4o")
-    model_config_medical: str = os.getenv("MODEL_CONFIG_MEDICAL", "claude-sonnet-4-20250514")
-    model_config_triage: str = os.getenv("MODEL_CONFIG_TRIAGE", "claude-sonnet-4-20250514")
-    model_config_careplan: str = os.getenv("MODEL_CONFIG_CAREPLAN", "gemini-1.5-pro")
+    model_config_medical: str = os.getenv("MODEL_CONFIG_MEDICAL", "gpt-4o-mini")  # Changed from Claude to OpenAI
+    model_config_triage: str = os.getenv("MODEL_CONFIG_TRIAGE", "gpt-4o-mini")  # Changed from Claude to OpenAI
+    model_config_careplan: str = os.getenv("MODEL_CONFIG_CAREPLAN", "gemini-2.0-flash")
     model_config_root: str = os.getenv("MODEL_CONFIG_ROOT", "gpt-4")
     
     # API Configuration
