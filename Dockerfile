@@ -15,9 +15,9 @@ RUN pip install -e .
 # Set Python path
 ENV PYTHONPATH=/app/src
 
-# Expose port
-EXPOSE $PORT
+# Expose port (Railway will set PORT env var)
+EXPOSE 8000
 
-# Start command
-CMD ["python", "-m", "uvicorn", "petcare_advisor.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Start command (Railway will use Start Command from settings, this is fallback)
+CMD python -m uvicorn petcare_advisor.main:app --host 0.0.0.0 --port ${PORT:-8000}
 
