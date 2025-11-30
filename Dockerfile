@@ -19,5 +19,6 @@ ENV PYTHONPATH=/app/src
 EXPOSE 8000
 
 # Start command (Railway will use Start Command from settings, this is fallback)
-CMD python -m uvicorn petcare_advisor.main:app --host 0.0.0.0 --port ${PORT:-8000}
+# Use sh -c to properly expand $PORT environment variable
+CMD sh -c "python -m uvicorn petcare_advisor.main:app --host 0.0.0.0 --port ${PORT:-8000}"
 
