@@ -30,6 +30,7 @@ class GraphState(BaseModel):
     vision_data: Optional[Dict[str, Any]] = None
     medical_data: Optional[Dict[str, Any]] = None
     triage_data: Optional[Dict[str, Any]] = None
+    collaborative_data: Optional[Dict[str, Any]] = None
     careplan_data: Optional[Dict[str, Any]] = None
     final_report: Optional[Dict[str, Any]] = None
     image_refs: Optional[list[str]] = None

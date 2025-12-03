@@ -11,6 +11,8 @@ from .vision_agent import vision_analysis_tool
 from .medical_agent import medical_analysis_tool
 from .triage_agent import triage_agent_tool
 from .careplan_agent import careplan_agent_tool
+from .collaborative_agent import collaborative_agent_tool
+from ..tools.faq_service import generate_recommended_questions
 
 logger = logging.getLogger(__name__)
 
@@ -36,8 +38,9 @@ MANDATORY RULES (TRD):
     (2) vision agent (only if image context exists)
     (3) medical agent
     (4) triage agent
-    (5) careplan agent
-    (6) final report builder
+    (5) collaborative agent (cross-validation)
+    (6) careplan agent
+    (7) final report builder
 4. You NEVER perform medical reasoning yourself.
 5. All medical reasoning MUST be delegated to sub-agents.
 6. Always read existing GraphState using SAFE mode.
@@ -153,17 +156,49 @@ def root_orchestrator(state: GraphState, user_input: str) -> Dict[str, Any]:
             raise
     
     # ------------------------------
-    # STEP 5: CAREPLAN AGENT
+    # STEP 5: COLLABORATIVE AGENT
     # ------------------------------
-    if state.careplan_data is None:
-        logger.info("[DEBUG] Step 5: Calling Careplan Agent")
-        print("[DEBUG] Step 5: Calling Careplan Agent")
+    if state.collaborative_data is None:
+        logger.info("[DEBUG] Step 5: Calling Collaborative Agent")
+        print("[DEBUG] Step 5: Calling Collaborative Agent")
         
         try:
-            result = careplan_agent_tool.invoke({
+            result = collaborative_agent_tool.invoke({
                 "symptom_data": state.symptom_data,
                 "medical_data": state.medical_data,
                 "triage_data": state.triage_data
+            })
+            logger.info(f"[DEBUG] Collaborative analysis completed: consensus={result.get('structured_data', {}).get('consensus', {}).get('consensus_reached', False)}")
+            return {
+                "status": "in_progress",
+                "step": "collaborative",
+                "collaborative_data": result,
+            }
+        except Exception as e:
+            logger.error(f"[ERROR] Collaborative analysis failed: {e}")
+            raise
+    
+    # ------------------------------
+    # STEP 6: CAREPLAN AGENT
+    # ------------------------------
+    if state.careplan_data is None:
+        logger.info("[DEBUG] Step 6: Calling Careplan Agent")
+        print("[DEBUG] Step 6: Calling Careplan Agent")
+        
+        try:
+            # Use collaborative consensus if available
+            collaborative_consensus = state.collaborative_data.get("structured_data", {}).get("consensus", {}) if state.collaborative_data else {}
+            triage_data_to_use = state.triage_data
+            if collaborative_consensus:
+                # Update triage data with consensus
+                triage_structured = triage_data_to_use.get("structured_data", {})
+                triage_structured["urgency_score"] = collaborative_consensus.get("final_triage_score", triage_structured.get("urgency_score", 2))
+                triage_structured["triage_level"] = collaborative_consensus.get("final_triage_level", triage_structured.get("triage_level", "MODERATE"))
+            
+            result = careplan_agent_tool.invoke({
+                "symptom_data": state.symptom_data,
+                "medical_data": state.medical_data,
+                "triage_data": triage_data_to_use
             })
             logger.info(f"[DEBUG] Careplan completed: {len(result.get('structured_data', {}).get('home_care_instructions', []))} instructions")
             return {
@@ -176,19 +211,30 @@ def root_orchestrator(state: GraphState, user_input: str) -> Dict[str, Any]:
             raise
     
     # ------------------------------
-    # STEP 6: FINAL REPORT
+    # STEP 7: FINAL REPORT
     # ------------------------------
     if state.final_report is None:
         logger.info("[DEBUG] Step 6: Building final report")
         print("[DEBUG] Step 6: Building final report")
         
         try:
+            # Generate recommended questions
+            symptom_structured = state.symptom_data.get("structured_data", {})
+            medical_structured = state.medical_data.get("structured_data", {})
+            symptoms = symptom_structured.get("main_symptoms", [])
+            diagnosis = medical_structured.get("primary_assessment", "")
+            species = symptom_structured.get("species", "")
+            
+            recommended_questions = generate_recommended_questions(symptoms, diagnosis, species)
+            
             report = build_final_report(
                 symptom=state.symptom_data,
                 vision=state.vision_data,
                 medical=state.medical_data,
                 triage=state.triage_data,
-                careplan=state.careplan_data
+                careplan=state.careplan_data,
+                collaborative=state.collaborative_data,
+                recommended_questions=recommended_questions
             )
             logger.info("[DEBUG] Final report built successfully")
             return {

@@ -162,13 +162,19 @@ async def triage_endpoint(request: TriageRequest) -> TriageResponse:
             return TriageResponse(success=False, report=None, error="Unexpected result from triage")
         state.triage_data = result.get("triage_data")
         
-        # Step 5: Careplan
+        # Step 5: Collaborative
+        result = root_orchestrator(state, request.symptom_description)
+        if result.get("status") != "in_progress":
+            return TriageResponse(success=False, report=None, error="Unexpected result from collaborative")
+        state.collaborative_data = result.get("collaborative_data")
+        
+        # Step 6: Careplan
         result = root_orchestrator(state, request.symptom_description)
         if result.get("status") != "in_progress":
             return TriageResponse(success=False, report=None, error="Unexpected result from careplan")
         state.careplan_data = result.get("careplan_data")
         
-        # Step 6: Final Report
+        # Step 7: Final Report
         result = root_orchestrator(state, request.symptom_description)
         if result.get("status") != "complete":
             return TriageResponse(success=False, report=None, error="Failed to build final report")

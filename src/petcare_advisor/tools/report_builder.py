@@ -13,6 +13,8 @@ def build_final_report(
     medical: Dict[str, Any],
     triage: Dict[str, Any],
     careplan: Dict[str, Any],
+    collaborative: Optional[Dict[str, Any]] = None,
+    recommended_questions: Optional[list] = None,
 ) -> Dict[str, Any]:
     """Assemble final triage report JSON from all agent results.
     
@@ -34,6 +36,7 @@ def build_final_report(
     medical_data = medical.get("structured_data", {})
     triage_data = triage.get("structured_data", {})
     careplan_data = careplan.get("structured_data", {})
+    collaborative_data = collaborative.get("structured_data", {}) if collaborative else {}
     
     # Build patient information
     patient_info = {
@@ -61,10 +64,14 @@ def build_final_report(
         "patient": patient_info,
         "summary": summary,
         "triage": {
-            "urgency_score": triage_data.get("urgency_score", 0),
-            "triage_level": triage_data.get("triage_level", "INFO"),
+            "urgency_score": collaborative_data.get("consensus", {}).get("final_triage_score", triage_data.get("urgency_score", 0)),
+            "base_score": triage_data.get("base_score", triage_data.get("urgency_score", 0)),
+            "weight_adjustment": triage_data.get("weight_adjustment", 0),
+            "triage_level": collaborative_data.get("consensus", {}).get("final_triage_level", triage_data.get("triage_level", "INFO")),
+            "act_color": triage_data.get("act_color", "Green"),
             "justification": triage_data.get("justification", ""),
             "risk_assessment": triage_data.get("risk_assessment", ""),
+            "pshvm_factors": triage_data.get("pshvm_factors", []),
             "time_sensitivity": triage_data.get("time_sensitivity"),
         },
         "differential_diagnosis": medical_data.get("differential_diagnosis", []),
@@ -74,10 +81,24 @@ def build_final_report(
             "when_to_see_vet": careplan_data.get("when_to_see_vet", ""),
             "emergency_indicators": careplan_data.get("emergency_indicators", []),
             "monitoring_guidance": careplan_data.get("monitoring_guidance", []),
+            "medication_guidance": careplan_data.get("medication_guidance", ""),
+            "medication_types": careplan_data.get("medication_types", []),
             "supportive_message": careplan_data.get("supportive_message", ""),
         },
         "red_flags": symptom_data.get("red_flags", []),
     }
+    
+    # Add collaborative diagnosis if available
+    if collaborative_data:
+        report["collaborative_diagnosis"] = {
+            "discrepancy_analysis": collaborative_data.get("discrepancy_analysis", {}),
+            "consensus": collaborative_data.get("consensus", {}),
+            "review_result": collaborative_data.get("review_result", {}),
+        }
+    
+    # Add recommended questions
+    if recommended_questions:
+        report["recommended_questions"] = recommended_questions
     
     # Add vision analysis if available
     if vision_data.get("has_images"):

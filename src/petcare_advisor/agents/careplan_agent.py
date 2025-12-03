@@ -8,6 +8,7 @@ from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field
 from ..config import get_settings
 from ..shared.constants import OUTPUT_KEY_CAREPLAN
+from ..tools.medication_service import get_medication_guidance
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -59,17 +60,26 @@ def _careplan_agent_function(
     # 종 정보 추출
     species = symptom_structured.get('species', '알 수 없음')
     
+    # Get medication guidance
+    symptoms = symptom_structured.get('main_symptoms', [])
+    primary_diagnosis = medical_structured.get('primary_assessment', '')
+    medication_guidance = get_medication_guidance(symptoms, primary_diagnosis, species)
+    
     # Build context (한글)
     context_parts = []
     context_parts.append(f"종: {species}")
     context_parts.append(f"응급도 레벨: {triage_structured.get('triage_level', '알 수 없음')}")
     context_parts.append(f"응급도 점수: {triage_structured.get('urgency_score', 0)}")
-    context_parts.append(f"주요 증상: {', '.join(symptom_structured.get('main_symptoms', []))}")
+    context_parts.append(f"주요 증상: {', '.join(symptoms)}")
     context_parts.append(f"시간 민감도: {triage_structured.get('time_sensitivity', '해당 없음')}시간")
     
     top_diagnosis = medical_structured.get("differential_diagnosis", [])
     if top_diagnosis:
         context_parts.append(f"가능성 높은 질환: {top_diagnosis[0].get('condition', '알 수 없음')}")
+    
+    # Add medication guidance if available
+    if medication_guidance.get("has_medication_guidance"):
+        context_parts.append(f"약물 안내: {medication_guidance.get('general_guidance', '')}")
     
     context = "\n".join(context_parts)
     
@@ -105,6 +115,7 @@ def _careplan_agent_function(
     "when_to_see_vet": "수의사 방문 시기에 대한 명확한 가이드 (한글로 작성)",
     "emergency_indicators": ["응급지표1", "응급지표2", ...],
     "monitoring_guidance": ["관찰사항1", "관찰사항2", ...],
+    "medication_guidance": "약물 안내 (한글로 작성, Medical Agent의 medication_guidance 참고)",
     "supportive_message": "공감적이고 지지적인 메시지 (한글로 작성)"
 }"""
     
@@ -123,6 +134,16 @@ def _careplan_agent_function(
             content = content.split("```")[1].split("```")[0].strip()
         
         structured_data = json.loads(content)
+        
+        # Add medication guidance if available
+        if medication_guidance.get("has_medication_guidance"):
+            structured_data["medication_guidance"] = medication_guidance.get("general_guidance", "")
+            structured_data["medication_types"] = medication_guidance.get("medication_types", [])
+        else:
+            # Use medical agent's medication guidance if available
+            medical_med_guidance = medical_structured.get("medication_guidance", "")
+            if medical_med_guidance:
+                structured_data["medication_guidance"] = medical_med_guidance
         
         logger.info(f"[CAREPLAN] Care plan generated: {len(structured_data.get('home_care_instructions', []))} home care instructions")
         
@@ -143,6 +164,7 @@ def _careplan_agent_function(
                 "when_to_see_vet": "",
                 "emergency_indicators": [],
                 "monitoring_guidance": [],
+                "medication_guidance": "",
                 "supportive_message": "",
             }
         }
